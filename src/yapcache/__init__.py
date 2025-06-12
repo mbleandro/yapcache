@@ -76,6 +76,7 @@ def memoize(
                     task = asyncio.create_task(_call_with_lock())
                     update_tasks[key] = task  # TODO: acho que tem problema
                     task.add_done_callback(lambda _: update_tasks.pop(key))
+                    status = CacheStatus.STALE
                 return process_result(MemoizeResult(result=found.value, cache_status=status), *args, **kwargs)
 
             result = await _call_with_lock()
