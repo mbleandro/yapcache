@@ -1,5 +1,8 @@
 import asyncio
+from dataclasses import dataclass
+from enum import Enum
 from functools import wraps
+from typing import Generic
 
 from typing_extensions import (
     Any,
@@ -20,12 +23,25 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
+class CacheStatus(Enum):
+    HIT = "hit"
+    MISS = "miss"
+    STALE = "stale"
+
+
+@dataclass
+class MemoizeResult(Generic[R]):
+    cache_status: CacheStatus
+    result: R
+
+
 def memoize(
     cache: Cache,
     cache_key: Callable[P, str],
     ttl: float | Callable[Concatenate[R, P], float],
     best_before: Callable[Concatenate[R, P], Optional[float]] = lambda _, *a, **kw: None,
     lock: Callable[[str], DistLock] = lambda *a, **kw: NullLock(),
+    process_result: Callable[[MemoizeResult[R]], R] = lambda r, *a, **kw: r.result,
 ) -> Callable[
     [Callable[P, Coroutine[Any, Any, R]]], Callable[P, Coroutine[Any, Any, R]]
 ]:
@@ -55,15 +71,16 @@ def memoize(
 
             found = await cache.get(key)
             if isinstance(found, CacheItem):
+                status = CacheStatus.HIT
                 if found.is_stale and key not in update_tasks:
                     task = asyncio.create_task(_call_with_lock())
                     update_tasks[key] = task  # TODO: acho que tem problema
                     task.add_done_callback(lambda _: update_tasks.pop(key))
-                return found.value
+                return process_result(MemoizeResult(result=found.value, cache_status=status), *args, **kwargs)
 
             result = await _call_with_lock()
 
-            return result
+            return process_result(MemoizeResult(result=result, cache_status=CacheStatus.MISS), *args, **kwargs)
 
         return wrapper
 
