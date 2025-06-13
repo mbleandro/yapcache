@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from functools import wraps
 from typing import Generic
 
@@ -23,7 +23,7 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 
-class CacheStatus(Enum):
+class CacheStatus(StrEnum):
     HIT = "hit"
     MISS = "miss"
     STALE = "stale"
