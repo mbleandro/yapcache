@@ -56,7 +56,7 @@ def memoize(
                 async with lock(key + ":lock"):
                     found = await cache.get(key)   # did someone populate the cache while I was waiting for the lock?
                     if isinstance(found, CacheItem) and not found.is_stale:
-                        return found.value
+                        return MemoizeResult(result=found.value, cache_status=CacheStatus.HIT)
 
                     result = await fn(*args, **kwargs)
 
@@ -67,7 +67,7 @@ def memoize(
                         best_before=best_before(result, *args, **kwargs),
                     )
 
-                    return result
+                    return MemoizeResult(result=result, cache_status=CacheStatus.MISS)
 
             found = await cache.get(key)
             if isinstance(found, CacheItem):
@@ -77,11 +77,13 @@ def memoize(
                     update_tasks[key] = task  # TODO: acho que tem problema
                     task.add_done_callback(lambda _: update_tasks.pop(key))
                     status = CacheStatus.STALE
-                return process_result(MemoizeResult(result=found.value, cache_status=status), *args, **kwargs)
+                return process_result(
+                    MemoizeResult(result=found.value, cache_status=status), *args, **kwargs
+                )
 
             result = await _call_with_lock()
 
-            return process_result(MemoizeResult(result=result, cache_status=CacheStatus.MISS), *args, **kwargs)
+            return process_result(result, *args, **kwargs)
 
         return wrapper
 
